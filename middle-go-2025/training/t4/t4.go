@@ -2,7 +2,6 @@ package t4
 
 import (
 	"bufio"
-	"container/heap"
 	"fmt"
 	"io"
 	"os"
@@ -62,63 +61,6 @@ type machineAvailability struct {
 	ind, start, end, capacity int
 }
 
-type minStartQueue struct {
-	machines []*machineAvailability
-}
-
-func (q *minStartQueue) Len() int {
-	return len(q.machines)
-}
-
-func (q *minStartQueue) Less(i, j int) bool {
-	if q.machines[i].start == q.machines[j].start {
-		return q.machines[i].ind < q.machines[j].ind
-	}
-	return q.machines[i].start < q.machines[j].start
-}
-
-func (q *minStartQueue) Swap(i, j int) {
-	q.machines[i], q.machines[j] = q.machines[j], q.machines[i]
-}
-
-func (q *minStartQueue) Push(x any) {
-	m := x.(*machineAvailability)
-	q.machines = append(q.machines, m)
-}
-
-func (q *minStartQueue) Pop() any {
-	m := q.machines[len(q.machines)-1]
-	q.machines = q.machines[:len(q.machines)-1]
-	return m
-}
-
-type maxEndQueue struct {
-	machines []*machineAvailability
-}
-
-func (q *maxEndQueue) Len() int {
-	return len(q.machines)
-}
-
-func (q *maxEndQueue) Less(i, j int) bool {
-	return q.machines[i].end > q.machines[j].end
-}
-
-func (q *maxEndQueue) Swap(i, j int) {
-	q.machines[i], q.machines[j] = q.machines[j], q.machines[i]
-}
-
-func (q *maxEndQueue) Push(x any) {
-	m := x.(*machineAvailability)
-	q.machines = append(q.machines, m)
-}
-
-func (q *maxEndQueue) Pop() any {
-	m := q.machines[len(q.machines)-1]
-	q.machines = q.machines[:len(q.machines)-1]
-	return m
-}
-
 type query struct {
 	orders   []order
 	machines []machineAvailability
@@ -135,45 +77,34 @@ func (s *ordersScheduler) GetSchedule(q *query) []int {
 		return a.arrivalTime - b.arrivalTime
 	})
 
-	minStart := &minStartQueue{machines: make([]*machineAvailability, 0, len(q.machines))}
-	for i := range q.machines {
-		minStart.machines = append(minStart.machines, &q.machines[i])
+	slices.SortFunc(q.machines, func(a, b machineAvailability) int {
+		if a.start == b.start {
+			return a.ind - b.ind
+		}
+		return a.start - b.start
+	})
+
+	ordersInd := 0
+	for i, machine := range q.machines {
+		for ordersInd < len(q.orders) && q.orders[ordersInd].arrivalTime < machine.start {
+			s.arrivalsSchedule[q.orders[ordersInd].i] = -1
+			ordersInd++
+		}
+
+		for ordersInd < len(q.orders) && q.orders[ordersInd].arrivalTime <= machine.end && q.machines[i].capacity > 0 {
+			s.arrivalsSchedule[q.orders[ordersInd].i] = machine.ind + 1
+			q.machines[i].capacity--
+			ordersInd++
+		}
+
+		if ordersInd >= len(q.orders) {
+			break
+		}
 	}
-	heap.Init(minStart)
 
-	maxEnd := &maxEndQueue{machines: make([]*machineAvailability, 0, len(q.machines))}
-	heap.Init(maxEnd)
-
-	for _, o := range q.orders {
-		found := false
-		for maxEnd.Len() > 0 {
-			if maxEnd.machines[0].end < o.arrivalTime {
-				break
-			}
-			heap.Push(minStart, heap.Pop(maxEnd))
-		}
-
-		for minStart.Len() > 0 {
-			if minStart.machines[0].start > o.arrivalTime {
-				break
-			}
-			if minStart.machines[0].end >= o.arrivalTime {
-				found = true
-				s.arrivalsSchedule[o.i] = minStart.machines[0].ind + 1
-
-				minStart.machines[0].capacity--
-				if minStart.machines[0].capacity == 0 {
-					heap.Pop(minStart)
-				}
-
-				break
-			}
-			heap.Push(maxEnd, heap.Pop(minStart))
-		}
-
-		if !found {
-			s.arrivalsSchedule[o.i] = -1
-		}
+	for ordersInd < len(q.orders) {
+		s.arrivalsSchedule[q.orders[ordersInd].i] = -1
+		ordersInd++
 	}
 
 	return s.arrivalsSchedule
