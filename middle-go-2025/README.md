@@ -3,3 +3,4 @@
 https://route256.ozon.ru/go-developer
 
 - ### [Training contest](training)
+- ### [Main contest](main)
