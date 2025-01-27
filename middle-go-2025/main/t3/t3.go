@@ -37,6 +37,7 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 
 	_, _ = in.ReadBytes('\n')
 
+	fn := newPrefixNode()
 	n1 := newPrefixNode()
 	n2 := newPrefixNode()
 
@@ -52,14 +53,13 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 		}
 		word = word[:len(word)-1]
 
-		n1WordsIndices := addWord(n1, word)
-		n2WordsIndices := addWord(n2, word[1:])
+		c1 := addWord(n1, word)
+		c2 := addWord(n2, word[1:])
+		c := addFullWord(fn, word)
 
-		res += len(n1WordsIndices) + len(n2WordsIndices) - getIntersectionLen(n1WordsIndices, n2WordsIndices)
-
-		n1WordsIndices[i] = struct{}{}
-		if n2WordsIndices != nil {
-			n2WordsIndices[i] = struct{}{}
+		res += c1 + c2
+		if c2 != 0 {
+			res -= c
 		}
 	}
 
@@ -67,20 +67,19 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 }
 
 type prefixNode struct {
-	children     []*prefixNode
-	wordsIndices map[int]struct{}
+	children   []*prefixNode
+	wordsCount int
 }
 
 func newPrefixNode() *prefixNode {
 	return &prefixNode{
-		children:     make([]*prefixNode, 26),
-		wordsIndices: make(map[int]struct{}),
+		children: make([]*prefixNode, 26),
 	}
 }
 
-func addWord(node *prefixNode, word []byte) map[int]struct{} {
+func addWord(node *prefixNode, word []byte) int {
 	if len(word) == 0 {
-		return nil
+		return 0
 	}
 	for i := 0; i < len(word); i += 2 {
 		ind := int(word[i] - 'a')
@@ -91,23 +90,26 @@ func addWord(node *prefixNode, word []byte) map[int]struct{} {
 		}
 		node = cNode
 	}
-	return node.wordsIndices
+
+	res := node.wordsCount
+	node.wordsCount++
+
+	return res
 }
 
-func getIntersectionLen(a, b map[int]struct{}) int {
-	var min_, max_ map[int]struct{}
-	if len(a) < len(b) {
-		min_, max_ = a, b
-	} else {
-		min_, max_ = b, a
+func addFullWord(node *prefixNode, word []byte) int {
+	for i := range word {
+		ind := int(word[i] - 'a')
+		cNode := node.children[ind]
+		if cNode == nil {
+			cNode = newPrefixNode()
+			node.children[ind] = cNode
+		}
+		node = cNode
 	}
 
-	res := 0
-	for i := range min_ {
-		if _, ok := max_[i]; ok {
-			res++
-		}
-	}
+	res := node.wordsCount
+	node.wordsCount++
 
 	return res
 }
