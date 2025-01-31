@@ -2,8 +2,14 @@ package t3
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
+)
+
+var (
+	h1Sb = &bytes.Buffer{}
+	h2Sb = &bytes.Buffer{}
 )
 
 func Task3() {
@@ -17,6 +23,9 @@ func Task3() {
 	if _, err := fmt.Fscan(in, &t); err != nil {
 		panic(fmt.Errorf("failed to read t: %w", err))
 	}
+
+	h1Sb.Grow(1_000_000)
+	h2Sb.Grow(1_000_000)
 
 	for i := range t {
 		pairsCount, err := countSimilarWordsPairs(in)
@@ -37,9 +46,9 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 
 	_, _ = in.ReadBytes('\n')
 
-	fn := newPrefixNode()
-	n1 := newPrefixNode()
-	n2 := newPrefixNode()
+	fullWordsCountMap := make(map[string]int, n)
+	h1WordsCountMap := make(map[string]int, n)
+	h2WordsCountMap := make(map[string]int, n)
 
 	var (
 		word []byte
@@ -53,9 +62,29 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 		}
 		word = word[:len(word)-1]
 
-		c1 := addWord(n1, word)
-		c2 := addWord(n2, word[1:])
-		c := addFullWord(fn, word)
+		h1Sb.Reset()
+		h2Sb.Reset()
+		for j := range word {
+			if j%2 == 0 {
+				h1Sb.WriteByte(word[j])
+			} else {
+				h2Sb.WriteByte(word[j])
+			}
+		}
+
+		fullWord := string(word)
+		h1Word := h1Sb.String()
+		h2Word := h2Sb.String()
+
+		c1 := h1WordsCountMap[h1Word]
+		c2 := h2WordsCountMap[h2Word]
+		c := fullWordsCountMap[fullWord]
+
+		h1WordsCountMap[h1Word]++
+		if len(h2Word) > 0 {
+			h2WordsCountMap[h2Word]++
+		}
+		fullWordsCountMap[fullWord]++
 
 		res += c1 + c2
 		if c2 != 0 {
@@ -64,52 +93,4 @@ func countSimilarWordsPairs(in *bufio.Reader) (int, error) {
 	}
 
 	return res, nil
-}
-
-type prefixNode struct {
-	children   []*prefixNode
-	wordsCount int
-}
-
-func newPrefixNode() *prefixNode {
-	return &prefixNode{
-		children: make([]*prefixNode, 26),
-	}
-}
-
-func addWord(node *prefixNode, word []byte) int {
-	if len(word) == 0 {
-		return 0
-	}
-	for i := 0; i < len(word); i += 2 {
-		ind := int(word[i] - 'a')
-		cNode := node.children[ind]
-		if cNode == nil {
-			cNode = newPrefixNode()
-			node.children[ind] = cNode
-		}
-		node = cNode
-	}
-
-	res := node.wordsCount
-	node.wordsCount++
-
-	return res
-}
-
-func addFullWord(node *prefixNode, word []byte) int {
-	for i := range word {
-		ind := int(word[i] - 'a')
-		cNode := node.children[ind]
-		if cNode == nil {
-			cNode = newPrefixNode()
-			node.children[ind] = cNode
-		}
-		node = cNode
-	}
-
-	res := node.wordsCount
-	node.wordsCount++
-
-	return res
 }
